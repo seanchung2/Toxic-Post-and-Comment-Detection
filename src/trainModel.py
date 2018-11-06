@@ -12,13 +12,24 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import initializers, regularizers, constraints, optimizers, layers
 
 
+max_features = 20000
+maxlen = 200
+embed_size = 128*2
+lstm_output = 60
+relu_output = 60
+dropout1 = 0.15
+dropout2 = 0.15
+weight_file_path = "bestWeights_{}_{}_{}_{}_{}_{}_{}.ckpt"\
+    .format(max_features, maxlen, embed_size, lstm_output, relu_output, int(dropout1*100), int(dropout2*100))
+
+model_file_path = "model_{}_{}_{}_{}_{}_{}_{}.json"\
+    .format(max_features, maxlen, embed_size, lstm_output, relu_output, int(dropout1*100), int(dropout2*100))
 # Loading the train and test files
 train = pd.read_csv('../input/train.csv')
 test = pd.read_csv('../input/test.csv')
 testLabel = pd.read_csv('../input/test_labels.csv')
 
 train = train.sample(frac=1)
-
 # A common pre-processing step is to check for nulls,
 # and fill the null values with something before proceeding to the next steps.
 # If you leave the null values intact, it will trip you up at the modelling stage later
@@ -39,7 +50,6 @@ list_sentences_test = test["comment_text"].fillna("CVxTz").values
 # Index Representation - We could represent the sequence of words in the comments in the form of index,
 # and feed this chain of index into our LSTM.
 #               For eg, [1,2,3,4,2,5]
-max_features = 20000
 tokenizer = Tokenizer(num_words=max_features)
 tokenizer.fit_on_texts(list(list_sentences_train))
 list_tokenized_train = tokenizer.texts_to_sequences(list_sentences_train)
@@ -53,7 +63,6 @@ list_tokenized_test = tokenizer.texts_to_sequences(list_sentences_test)
 # plt.hist(totalNumWords, bins=np.arange(0, 410, 10))
 # plt.show()
 # from the result ==> 200 seems to be a fair number
-maxlen = 200
 X_train = pad_sequences(list_tokenized_train, maxlen=maxlen)
 X_test = pad_sequences(list_tokenized_test, maxlen=maxlen)
 
@@ -72,7 +81,6 @@ def createModel():
     # The output of the Embedding layer is just a list of the coordinates of the words in this vector space.
     # We need to define the size of the "vector space" we have mentioned above,
     # and the number of unique words(max_features) we are using.
-    embed_size = 256
     x = Embedding(max_features, embed_size)(inputData)          # output: 3-D tensor (None, 200, 128)
 
     # LSTM layler
@@ -81,7 +89,8 @@ def createModel():
     #       Time Steps is the number of recursion it runs for each input
     #       Number of Inputs is the number of variables (number of words in each sentence) you pass into LSTM
     # we want the unrolled version, where 50 is the output dimension we have defined.
-    x = Bidirectional(LSTM(50, return_sequences=True, name='lstm_layer'))(x)    # output: 3-D tensor (None, 200, 60)
+    x = Bidirectional(LSTM(lstm_output, return_sequences=True, name='lstm_layer'))(x)
+    # output: 3-D tensor (None, 200, 60)
 
     # Max pooling layer
     # Reshape the 3D tensor into a 2D one by max pooling.
@@ -92,15 +101,15 @@ def createModel():
     # Dropout Layer
     # Dropout some nodes to achieve better generalization
     # Dropout 15% of nodes
-    x = Dropout(0.15)(x)
+    x = Dropout(dropout1)(x)
 
     # Activation Layer
     # A relu layer with output dimension of 60
-    x = Dense(60, activation="relu")(x)
+    x = Dense(relu_output, activation="relu")(x)
 
     # Dropout Layer
     # Dropout 5% of nodes
-    x = Dropout(0.15)(x)
+    x = Dropout(dropout2)(x)
 
     # Activation Layer
     # A sigmoid layer since we are trying to achieve a binary classification(1,0) for each of the 6 labels,
@@ -115,55 +124,69 @@ def createModel():
 
 
 def loadModel():
+    try:
+        # load json and create model
+        json_file = open(model_file_path, 'r')
+        loaded_model_json = json_file.read()
+        json_file.close()
+        model = model_from_json(loaded_model_json)
 
-    # load json and create model
-    json_file = open('model.json', 'r')
-    loaded_model_json = json_file.read()
-    json_file.close()
-    model = model_from_json(loaded_model_json)
+        # load weights into new model
+        model.load_weights("model.h5")
+        print("Loaded model from disk")
+        return model
 
-    # load weights into new model
-    model.load_weights("model.h5")
-    print("Loaded model from disk")
-
-    return model
+    except Exception:
+        model = createModel()
+        print "Creating new model"
+        return model
 
 
 def saveModel(model):
     # serialize model to JSON
     model_json = model.to_json()
-    with open("model.json", "w") as json_file:
+    with open(model_file_path, "w") as json_file:
         json_file.write(model_json)
     # serialize weights to HDF5
-    model.save_weights("model.h5")
+    # model.save_weights("model.h5")
     print("Saved model to disk")
 
 
 def testModel(model, X_test):
     y_test = model.predict(X_test)
-    sample_submission = pd.read_csv("../input/Sean_submission.csv")
-    sample_submission[list_classes] = y_test
+    submission = pd.read_csv("../input/submission.csv")
+    submission[list_classes] = y_test
+    submission.to_csv("../input/submission_{}_{}_{}_{}_{}_{}_{}.csv".format(max_features, maxlen, embed_size, lstm_output, relu_output, int(dropout1*100), int(dropout2*100)), index=False)
 
 
-model = createModel()   # or loadModel()
+def setupEarlyStop():
+    checkpoint = ModelCheckpoint(weight_file_path, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
+    early = EarlyStopping(monitor="val_loss", mode="min", patience=20)
+    callbacks_list = [checkpoint, early]
+
+    return callbacks_list
+
+
+def loadWeights(model):
+    try:
+        model.load_weights(weight_file_path)
+    except IOError:
+        print 'No weight file, creating one...'
+
+
+model = loadModel()   # or loadModel()
 
 ''''''''''''''''''''
 '''   Training   '''
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])   # SGD, Momentum, RMSprop, Adam
+model.compile(loss='binary_crossentropy', optimizer='RMSprop', metrics=['accuracy'])   # SGD, Momentum, RMSprop, Adam
 
-# early stop
-file_path = "bestWeights.hdf5"
-checkpoint = ModelCheckpoint(file_path, monitor='val_loss', verbose=1, save_best_only=True, mode='min')
-early = EarlyStopping(monitor="val_loss", mode="min", patience=20)
-callbacks_list = [checkpoint, early]
+callbacks_list = setupEarlyStop()
+loadWeights(model)
 
 model.fit(X_train, y, batch_size=32, epochs=1, validation_split=0.1, callbacks=callbacks_list)
 model.summary()
 saveModel(model)
-
-model.load_weights(file_path)
+loadWeights(model)
 
 # test model (predicting)
 testModel(model, X_test)
-
-
