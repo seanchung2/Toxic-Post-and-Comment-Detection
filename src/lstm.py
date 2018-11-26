@@ -13,8 +13,8 @@ from keras import initializers, regularizers, constraints, optimizers, layers
 
 
 max_features = 20000
-maxlen = 200
-embed_size = 300  # 128
+maxlen = 100
+embed_size = 350  # 128
 lstm_output = 50
 relu_output = 50
 dropout1 = 0.10
@@ -157,7 +157,10 @@ def testModel(model, X_test):
     y_test = model.predict(X_test)
     submission = pd.read_csv("../input/submission.csv")
     submission[list_classes] = y_test
-    submission.to_csv("../input/submission_{}_{}_{}_{}_{}_{}_{}.csv".format(max_features, maxlen, embed_size, lstm_output, relu_output, int(dropout1*100), int(dropout2*100)), index=False)
+    submission.to_csv("../input/submission_lstm_{}_{}_{}_{}_{}_{}_{}.csv".format(max_features, maxlen, embed_size,
+                                                                                 lstm_output, relu_output,
+                                                                                 int(dropout1*100), int(dropout2*100)),
+                      index=False)
 
 
 def setupEarlyStop():
@@ -184,7 +187,7 @@ model.compile(loss='binary_crossentropy', optimizer='Adam', metrics=['accuracy']
 
 callbacks_list = setupEarlyStop()
 
-model.fit(X_train, y, batch_size=32, epochs=4, validation_split=0.1, callbacks=callbacks_list)
+model.fit(X_train, y, batch_size=32, epochs=2, validation_split=0.1, callbacks=callbacks_list)
 model.summary()
 saveModel(model)
 loadWeights(model)

@@ -4,7 +4,6 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import re
-import string
 
 
 # train and test are data-sets
@@ -47,7 +46,7 @@ smooth_idf: Smooth idf weights by adding one to document frequencies,
 sublinear_tf: Apply sublinear tf scaling, i.e. replace tf with 1 + log(tf).
 '''
 # was (1, 2), 3
-vector = TfidfVectorizer(ngram_range=(1, 3), tokenizer=tokenize, min_df=1, max_df=0.97, strip_accents='unicode',
+vector = TfidfVectorizer(ngram_range=(1, 3), tokenizer=tokenize, min_df=2, max_df=0.97, strip_accents='unicode',
                          use_idf=1, smooth_idf=1, sublinear_tf=1)
 # fit_transform => fit then transform
 # fit: tokenize and build vocab
