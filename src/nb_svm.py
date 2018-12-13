@@ -52,7 +52,7 @@ vector = TfidfVectorizer(ngram_range=(1, 3), tokenizer=tokenize, min_df=2, max_d
 # fit: tokenize and build vocab
 # transform: encode document
 trainTermDocument = vector.fit_transform(train[COMMENT])
-test_term_doc = vector.transform(test[COMMENT])
+testTermDocument = vector.transform(test[COMMENT])
 
 
 # this is the function to calculate the conditional probability for naive bayes
@@ -61,7 +61,7 @@ def conditionalProbability(y_i, y):
     return (trainTermDocument[y == y_i].sum(0) + 1) / ((y == y_i).sum() + 1)
 
 
-def get_mdl(y):
+def getModel(y):
     y = y.values
     # r is the conditional probability (parameter) for naive bayes
     r = np.log(conditionalProbability(1, y) / conditionalProbability(0, y))
@@ -71,9 +71,9 @@ def get_mdl(y):
     # dual: Dual or primal formulation.
     #    Dual formulation is only implemented for l2 penalty with liblinear solver.
     #    Prefer dual=False when n_samples > n_features.
-    m = LogisticRegression(C=4, dual=True)
+    model = LogisticRegression(C=4, dual=True)
     x_nb = trainTermDocument.multiply(r)
-    return m.fit(x_nb, y), r
+    return model.fit(x_nb, y), r
 
 
 # result of prediction
@@ -82,9 +82,20 @@ prediction = np.zeros((len(test), len(toxicLabels)))
 # iterate through each label
 for i, j in enumerate(toxicLabels):
     print('fit', j)
-    m, r = get_mdl(train[j])
-    prediction[:, i] = m.predict_proba(test_term_doc.multiply(r))[:, 1]
+    model, r = getModel(train[j])
+    prediction[:, i] = model.predict_proba(testTermDocument.multiply(r))[:, 1]
 
 # final submission
 submission = pd.concat([pd.DataFrame({'id': submitFormat["id"]}), pd.DataFrame(prediction, columns=toxicLabels)], axis=1)
 submission.to_csv('../input/submission_nbsvm.csv', index=False)
+
+# save the prediction for training
+# result = pd.read_csv('../input/result.csv')
+prediction = np.zeros((len(train), len(toxicLabels)))
+# iterate through each label
+for i, j in enumerate(toxicLabels):
+    print('fit', j)
+    model, r = getModel(train[j])
+    prediction[:, i] = model.predict_proba(trainTermDocument.multiply(r))[:, 1]
+result = pd.concat([pd.DataFrame(prediction, columns=toxicLabels)], axis=1)
+result.to_csv('../input/trainResult_nbsvm.csv', index=False)

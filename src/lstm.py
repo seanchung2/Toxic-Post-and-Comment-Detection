@@ -19,10 +19,10 @@ lstm_output = 50
 relu_output = 50
 dropout1 = 0.10
 dropout2 = 0.10
-weight_file_path = "bestWeights_{}_{}_{}_{}_{}_{}_{}.ckpt"\
+weight_file_path = "lstm_weights_{}_{}_{}_{}_{}_{}_{}.ckpt"\
     .format(max_features, maxlen, embed_size, lstm_output, relu_output, int(dropout1*100), int(dropout2*100))
 
-model_file_path = "model_{}_{}_{}_{}_{}_{}_{}.json"\
+model_file_path = "lstm_model_{}_{}_{}_{}_{}_{}_{}.json"\
     .format(max_features, maxlen, embed_size, lstm_output, relu_output, int(dropout1*100), int(dropout2*100))
 # Loading the train and test files
 train = pd.read_csv('../input/train.csv')
@@ -157,10 +157,12 @@ def testModel(model, X_test):
     y_test = model.predict(X_test)
     submission = pd.read_csv("../input/submission.csv")
     submission[list_classes] = y_test
-    submission.to_csv("../input/submission_lstm_{}_{}_{}_{}_{}_{}_{}.csv".format(max_features, maxlen, embed_size,
-                                                                                 lstm_output, relu_output,
-                                                                                 int(dropout1*100), int(dropout2*100)),
-                      index=False)
+    submission.to_csv("../input/submission_lstm.csv", index=False)
+    # submission.to_csv("../input/submission_lstm_{}_{}_{}_{}_{}_{}_{}.csv".format(max_features, maxlen, embed_size,
+    #                                                                              lstm_output, relu_output,
+    #                                                                              int(dropout1*100), int(dropout2*100))
+    # ,
+    #                   index=False)
 
 
 def setupEarlyStop():
@@ -179,7 +181,7 @@ def loadWeights(model):
         print('No weight file, creating one...')
 
 
-model = loadModel()   # or loadModel()
+model = loadModel()
 
 ''''''''''''''''''''
 '''   Training   '''
@@ -187,10 +189,16 @@ model.compile(loss='binary_crossentropy', optimizer='Adam', metrics=['accuracy']
 
 callbacks_list = setupEarlyStop()
 
-model.fit(X_train, y, batch_size=32, epochs=2, validation_split=0.1, callbacks=callbacks_list)
+model.fit(X_train, y, batch_size=32, epochs=2, validation_split=0.05, callbacks=callbacks_list)
 model.summary()
 saveModel(model)
 loadWeights(model)
 
 # test model (predicting)
 testModel(model, X_test)
+
+# save the prediction for training
+trainResult = model.predict(X_train)
+# result = pd.read_csv("../input/result.csv")
+result = pd.concat([pd.DataFrame(trainResult, columns=list_classes)], axis=1)
+result.to_csv('../input/trainResult_lstm.csv', index=False)
